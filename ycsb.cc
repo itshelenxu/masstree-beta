@@ -11,7 +11,7 @@
 // #include "tbb/tbb.h"
 // #include <tlx/container/btree_set.hpp>
 // #include "tlx/container/btree_map.hpp"
-// #include <cilk/cilk.h>
+#include <cilk/cilk.h>
 #include<thread>
 using lcdf::Str;
 using lcdf::String;
@@ -112,7 +112,7 @@ void ycsb_load_run_string(int index_type, int wl, int kt, int ap, int num_thread
 }
 
 template <typename F> inline void parallel_for(size_t start, size_t end, F f) {
-  for(size_t i = start; i < end; i++) f(i);
+  cilk_for(size_t i = start; i < end; i++) f(i);
 }
 
 template <class T>
@@ -295,14 +295,14 @@ void ycsb_load_run_randint(C &client, int index_type, int wl, int kt, int ap, in
                         std::vector<Str> found_keys, values;
                         client.scan_sync(search_key.string(), ranges[i], found_keys, values);
                         
-                        uint64_t key_sum = 0, val_sum = 0;
+                        // uint64_t key_sum = 0, val_sum = 0;
 
-                        for (size_t j = 0; j < values.size(); ++j) {
-                            key_sum += found_keys[j].to_i();
-                            val_sum += values[j].to_i();
-                        }
-                        query_results_keys[i] = key_sum;
-                        query_results_vals[i] = val_sum;
+                        // for (size_t j = 0; j < values.size(); ++j) {
+                        //     key_sum += found_keys[j].to_i();
+                        //     val_sum += values[j].to_i();
+                        // }
+                        // query_results_keys[i] = key_sum;
+                        // query_results_vals[i] = val_sum;
                         client.rcu_quiesce();
                     // } else if (ops[i] == OP_SCAN_END) {
 			        //     uint64_t key_sum = 0, val_sum = 0;
@@ -361,10 +361,10 @@ void kvtest_ycsb(C &client){
         int kt = RANDINT_KEY;
         int ap = UNIFORM;
         int num_thread = 4;
-        // ycsb_load_run_randint(client, index_type, wl, kt, ap, num_thread, init_keys, keys,ranges_end, ranges, ops);
-
-        wl = WORKLOAD_E;
         ycsb_load_run_randint(client, index_type, wl, kt, ap, num_thread, init_keys, keys,ranges_end, ranges, ops);
+
+        // wl = WORKLOAD_E;
+        // ycsb_load_run_randint(client, index_type, wl, kt, ap, num_thread, init_keys, keys,ranges_end, ranges, ops);
 
 }
 

@@ -48,7 +48,6 @@ bench/server/volt2mp/go.sh
 bench/server/voltdb-kv-benchmark/kv.jar
 bench/server/voltdb-kv-benchmark/kvbench-log.txt
 bench/server/voltdb-kv-benchmark/bin
-GNUmakefile
 log
 tags
 results
