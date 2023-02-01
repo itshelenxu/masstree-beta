@@ -95,8 +95,8 @@ namespace Dummy {
 }
 
 
-static uint64_t LOAD_SIZE = 100000000;
-static uint64_t RUN_SIZE = 100000000;
+static uint64_t LOAD_SIZE = 10000000;
+static uint64_t RUN_SIZE = 10000000;
 
 void loadKey(TID tid, Key &key) {
     return ;
@@ -272,7 +272,10 @@ void ycsb_load_run_randint(C &client, int index_type, int wl, int kt, int ap, in
                 // Load
                 auto starttime = get_usecs(); // std::chrono::system_clock::now();
                 parallel_for(0, LOAD_SIZE, [&](const uint64_t &i) {
-                    client.put(init_keys[i], init_keys[i]);
+                    printf("in load i = %u and val = %lu\n", i, init_keys[i]);
+                    char buf[64];
+                    client.put(Str::snprintf(buf, sizeof(buf), "%lu", init_keys[i]), init_keys[i]);
+                    // client.put(init_keys[i], init_keys[i]);
                 });
                 auto end = get_usecs();
                 auto duration = end- starttime; //std::chrono::duration_cast<std::chrono::microseconds>(
@@ -285,9 +288,12 @@ void ycsb_load_run_randint(C &client, int index_type, int wl, int kt, int ap, in
             auto starttime = std::chrono::system_clock::now();
             parallel_for(0, RUN_SIZE, [&](const uint64_t &i) {
                     if (ops[i] == OP_INSERT) {
-                        client.put(keys[i], keys[i]);
+                        printf("in run i = %u and val = %lu\n", i, keys[i]);
+                        char buf[64];
+                        client.put(Str::snprintf(buf, sizeof(buf), "%lu", keys[i]), keys[i]);
                     } else if (ops[i] == OP_READ) {
-                        client.get_check(keys[i], keys[i]);
+                        char buf[64];
+                        client.get_check(Str::snprintf(buf, sizeof(buf), "%lu", keys[i]), keys[i]);
                     } else if (ops[i] == OP_SCAN) {
 
                         quick_istr search_key;
