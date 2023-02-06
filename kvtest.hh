@@ -19,10 +19,16 @@
 #include "misc.hh"
 #include "kvproto.hh"
 #include "kvrandom.hh"
+#include <cstdint>
 #include <vector>
 #include <fstream>
 #include <random>
+#include <atomic>
+
+#ifndef EXAMPLE_H
+#define EXAMPLE_H
 #include "ycsb.cc"
+#endif
 
 using lcdf::Str;
 using lcdf::String;
@@ -96,74 +102,92 @@ void kvtest_sync_rw1(C &client)
 }
 
 template <typename C>
-unsigned kvtest_rw1puts_seed(C& client, int seed) {
+unsigned kvtest_rw1puts_seed(C& client, int seed, int tid) {
     client.rand.seed(seed);
-    double tp0 = client.now();
+
     unsigned n;
-    for (n = 0; !client.timeout(0) && n <= client.limit(); ++n) {
-        int32_t x = (int32_t) client.rand();
-        client.put(x, x + 1);
+    ycsb_data* ycdata = get_ycsb_data();
+
+    uint64_t per_thread = ycdata->init_keys.size() / client.nthreads();
+    uint64_t start = tid * (per_thread); 
+    uint64_t end = start + per_thread;
+
+   fprintf(stderr, " IN load phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
+
+    double tp0 = client.now();
+    for (n = start; n < end; ++n) {
+        uint64_t x = ycdata->init_keys[n];
+        client.put(x, x);
     }
+
     client.wait_all();
     double tp1 = client.now();
     client.puts_done();
 
-    client.report(kvtest_set_time(Json(), "puts", n, tp1 - tp0));
+    client.report(kvtest_set_time(Json(), "puts", per_thread, tp1 - tp0));
     return n;
 }
-
+std::atomic<int> atomic_count{0};
 // do a bunch of inserts to distinct keys, then check that they all showed up.
 // sometimes overwrites, but only w/ same value.
 // different clients might use same key sometimes.
+
+std::atomic<int> atomic_run_count{0};
+
 template <typename C>
-void kvtest_rw1_seed(C &client, int seed)
-{
-    unsigned n = kvtest_rw1puts_seed(client, seed);
+void kvtest_rw1run(C &client){
+
+    int tid = atomic_run_count++;
+
 
     client.notice("now getting\n");
-    int32_t *a = (int32_t *) malloc(sizeof(int32_t) * n);
-    assert(a);
-    client.rand.seed(seed);
-    for (unsigned i = 0; i < n; ++i) {
-        a[i] = (int32_t) client.rand();
-    }
-    kvrandom_uniform_int_distribution<unsigned> swapd(0, n - 1);
-    for (unsigned i = 0; i < n; ++i) {
-        std::swap(a[i], a[swapd(client.rand)]);
-    }
 
+    ycsb_data* ycdata = get_ycsb_data();
+    uint64_t per_thread = ycdata->ops.size() / client.nthreads();
+    uint64_t start = tid * (per_thread); 
+    uint64_t end = start + per_thread;
+
+   fprintf(stderr, " IN run phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
     double tg0 = client.now();
     unsigned g;
-#if 0
-#define BATCH 8
-    for(g = 0; g+BATCH < n && !client.timeout(1); g += BATCH){
-      long key[BATCH], expected[BATCH];
-      for(int i = 0; i < BATCH; i++){
-        key[i] = a[g+i];
-        expected[i] = a[g+i] + 1;
-      }
-      client.many_get_check(BATCH, key, expected);
+
+    for (g = start; g < end; ++g) {
+        if (ycdata->ops[g] == OP_INSERT || ycdata->ops[g] == OP_UPDATE) {
+            // fprintf(stdout, " Putting %lu \n ", ycdata->keys[g]);
+            client.put(ycdata->keys[g], ycdata->keys[g]);
+        } else if (ycdata->ops[g] == OP_READ) {
+            // fprintf(stdout, " Searching %lu \n ", ycdata->keys[g]);
+            client.get_check_u64(ycdata->keys[g], ycdata->keys[g]);
+            // fprintf(stderr, "GET PASSESSSS!\n");
+        } else{
+            fprintf(stderr, "NOT SUPPORTED CMD!\n");
+            exit(0);
+        }
     }
-#else
-    for (g = 0; g < n && !client.timeout(1); ++g) {
-        client.get_check(a[g], a[g] + 1);
-    }
-#endif
+
     client.wait_all();
     double tg1 = client.now();
 
     Json result = client.report(Json());
-    kvtest_set_time(result, "gets", g, tg1 - tg0);
-    double delta_puts = n / result["puts_per_sec"].as_d();
-    kvtest_set_time(result, "ops", n + g, delta_puts + (tg1 - tg0));
+    kvtest_set_time(result, "gets", per_thread, tg1 - tg0);
+    // double delta_puts = n / result["puts_per_sec"].as_d();
+    // kvtest_set_time(result, "ops", n + g, delta_puts + (tg1 - tg0));
     client.report(result);
-    free(a);
+}
+
+
+template <typename C>
+void kvtest_rw1_seed(C &client, int seed)
+{
+    int tid = atomic_count++;
+    unsigned n = kvtest_rw1puts_seed(client, seed, tid);
+ 
 }
 
 template <typename C>
 void kvtest_rw1puts(C &client)
 {
-    kvtest_rw1puts_seed(client, kvtest_first_seed + client.id() % 48);
+    kvtest_rw1puts_seed(client, kvtest_first_seed + client.id() % 48, 0);
 }
 
 template <typename C>
@@ -1543,8 +1567,6 @@ void kvtest_rcol1at(C &client, int col, int seed, long maxkeys)
 template <typename C>
 void kvtest_scan1(C &client, double writer_quiet)
 {
-        fprintf(stderr, "%s\n", "Running ycsb");
-    kvtest_ycsb(client);
 
     // int n, wq65536 = int(writer_quiet * 65536);
     // if (client.limit() == ~(uint64_t) 0) {

@@ -1,8 +1,8 @@
 AR = ar
-CC = clang
-CXX = /opt/opencilk/bin/clang++
+CC = gcc
+CXX = g++
 CPPFLAGS = 
-CXXFLAGS = -g -W -Wall -fopencilk -O3 
+CXXFLAGS = -g -W -Wall -O3
 RANLIB = ranlib
 DEPSDIR := .deps
 DEPCFLAGS = -MD -MF $(DEPSDIR)/$*.d -MP
@@ -18,7 +18,6 @@ endif
 ifneq ($(strip $(NOSUPERPAGE)), )
   CPPFLAGS += -DNOSUPERPAGE
 endif
-
 LIBS = -lnuma  -lpthread -lm
 LDFLAGS = 
 

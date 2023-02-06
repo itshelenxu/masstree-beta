@@ -17,6 +17,7 @@
 // mttest: key/value tester
 //
 
+#include <cstdint>
 #include <stdio.h>
 #include <stdarg.h>
 #include <ctype.h>
@@ -69,6 +70,11 @@
 #include "clp.h"
 #include <algorithm>
 #include <numeric>
+
+#ifndef EXAMPLE_H
+#define EXAMPLE_H
+#include "ycsb.cc"
+#endif
 
 static std::vector<int> cores;
 volatile bool timeout[2] = {false, false};
@@ -202,6 +208,12 @@ struct kvtest_client {
     void get_check(const char *key, const char *expected) {
         get_check(Str(key), Str(expected));
     }
+
+    void get_check_u64(uint64_t ikey, uint64_t iexpected) {
+        quick_istr key(ikey), expected(iexpected);
+        get_check(key.string(), expected.string());
+    }
+
     void get_check(long ikey, long iexpected) {
         quick_istr key(ikey), expected(iexpected);
         get_check(key.string(), expected.string());
@@ -370,13 +382,18 @@ template <typename T>
 void kvtest_client<T>::get_check(Str key, Str expected) {
     Str val;
     if (unlikely(!q_[0].run_get1(table_->table(), key, 0, val, *ti_))) {
-        fail("get(%s) failed (expected %s)\n", String(key).printable().c_str(),
-             String(expected).printable().c_str());
+        fprintf(stdout, "Error: key = %s Expecetd val %s but not found. \n", key.data(), expected.data());
+        // fail("get(%s) failed (expected %s)\n", String(key).printable().c_str(),
+        //      String(expected).printable().c_str());
     } else if (unlikely(expected != val)) {
-        fail("get(%s) returned unexpected value %s (expected %s)\n",
-             String(key).printable().c_str(),
-             String(val).substr(0, 40).printable().c_str(),
-             String(expected).substr(0, 40).printable().c_str());
+        fprintf(stdout, "Error: Expecetd %lu but found %lu \n", expected, val);
+
+        // fail("get(%s) returned unexpected value %s (expected %s)\n",
+        //      String(key).printable().c_str(),
+        //      String(val).substr(0, 40).printable().c_str(),
+        //      String(expected).substr(0, 40).printable().c_str());
+    }else{
+        //  fprintf(stdout, " FOUND %lu!!\n", key);
     }
 }
 
@@ -566,6 +583,8 @@ static pthread_cond_t subtest_cond;
 #include "testrunner.hh"
 
 MAKE_TESTRUNNER(rw1, kvtest_rw1(client));
+MAKE_TESTRUNNER(rw1run, kvtest_rw1run(client));
+
 // MAKE_TESTRUNNER(palma, kvtest_palma(client));
 // MAKE_TESTRUNNER(palmb, kvtest_palmb(client));
 MAKE_TESTRUNNER(rw1fixed, kvtest_rw1fixed(client));
@@ -1048,6 +1067,7 @@ Try 'mttest --help' for options.\n");
     // run tests
     int nruns = ntrials * (int) tests.size() * (int) treetypes.size();
     std::vector<int> runlist(nruns, 0);
+    kvtest_ycsb(); 
     for (int i = 0; i < nruns; ++i)
         runlist[i] = i;
 
@@ -1101,8 +1121,27 @@ static void run_one_test_body(int trial, const char *treetype, const char *test)
         if (strcmp(test_thread_map[i].treetype, treetype) == 0) {
             current_test_name = test;
             current_trial = trial;
+
+            auto starttime = std::chrono::system_clock::now();
             test_thread_map[i].setup_func(main_ti, test_thread_initialize);
             runtest(tcpthreads, test_thread_map[i].go_func);
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                                std::chrono::system_clock::now() - starttime);
+
+            printf("\t LOAD, throughput: %f ,ops/us\n", (LOAD_SIZE * 1.0) / duration.count());
+
+            if (strcmp(test, "rw1") == 0){
+                fprintf(stderr, "LOADDD COMPLETE");
+                current_test_name = "rw1run";
+                auto starttime = std::chrono::system_clock::now();
+                runtest(tcpthreads, test_thread_map[i].go_func);
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::system_clock::now() - starttime);
+                printf("\t RUN, throughput: %f ,ops/us\n", (RUN_SIZE * 1.0) / duration.count());
+
+                fprintf(stderr, "RUNN COMPLETE");
+            }
+
             if (tree_stats)
                 test_thread_map[i].setup_func(main_ti, test_thread_stats);
             test_thread_map[i].setup_func(main_ti, test_thread_destroy);

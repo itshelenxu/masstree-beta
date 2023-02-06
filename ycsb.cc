@@ -1,6 +1,9 @@
-#include "kvtest.hh"
+
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <chrono>
+#include <iterator>
 #include <random>
 #include <cstring>
 #include <vector>
@@ -11,11 +14,8 @@
 // #include "tbb/tbb.h"
 // #include <tlx/container/btree_set.hpp>
 // #include "tlx/container/btree_map.hpp"
-#include <cilk/cilk.h>
+// #include <cilk/cilk.h>
 #include<thread>
-using lcdf::Str;
-using lcdf::String;
-using lcdf::Json;
 
 static long get_usecs() {
   struct timeval st;
@@ -112,7 +112,7 @@ void ycsb_load_run_string(int index_type, int wl, int kt, int ap, int num_thread
 }
 
 template <typename F> inline void parallel_for(size_t start, size_t end, F f) {
-  cilk_for(size_t i = start; i < end; i++) f(i);
+  for(size_t i = start; i < end; i++) f(i);
 }
 
 template <class T>
@@ -128,8 +128,17 @@ std::vector<T> create_random_data(size_t n, size_t max_val,
   return v;
 }
 
-template <typename C>
-void ycsb_load_run_randint(C &client, int index_type, int wl, int kt, int ap, int num_thread,
+struct ycsb_data{
+    std::vector<uint64_t> init_keys;
+    std::vector<uint64_t> keys;
+    std::vector<uint64_t> ranges_end;
+    std::vector<int> ranges;
+    std::vector<int> ops;
+    uint64_t load_size;
+    uint64_t run_size;
+} ycsb;
+
+void ycsb_load_run_randint( int index_type, int wl, int kt, int ap, int num_thread,
         std::vector<uint64_t> &init_keys,
         std::vector<uint64_t> &keys,
         std::vector<uint64_t> &range_end,
@@ -258,117 +267,35 @@ void ycsb_load_run_randint(C &client, int index_type, int wl, int kt, int ap, in
 
     fprintf(stderr, "Loaded %d more keys\n", count);
 
-    std::this_thread::sleep_for(std::chrono::nanoseconds(3000000000));
-
-    fprintf(stderr, "Slept\n");
-
-    // if (index_type == TYPE_BTREE) {
-
-
-    //     for(int k =0; k<6; k++){
-            std::vector<uint64_t> query_results_keys(RUN_SIZE);
-            std::vector<uint64_t> query_results_vals(RUN_SIZE);
-            {
-                // Load
-                auto starttime = get_usecs(); // std::chrono::system_clock::now();
-                parallel_for(0, LOAD_SIZE, [&](const uint64_t &i) {
-                    printf("in load i = %u and val = %lu\n", i, init_keys[i]);
-                    char buf[64];
-                    client.put(Str::snprintf(buf, sizeof(buf), "%lu", init_keys[i]), init_keys[i]);
-                    // client.put(init_keys[i], init_keys[i]);
-                });
-                auto end = get_usecs();
-                auto duration = end- starttime; //std::chrono::duration_cast<std::chrono::microseconds>(
-                        //std::chrono::system_clock::now() - starttime);
-                printf("\tLoad took %lu us, throughput = %f ops/us\n", duration, ((double)LOAD_SIZE)/duration);
-                //printf("Throughput: load, %f ,ops/us and time %ld in us\n", (LOAD_SIZE * 1.0) / duration.count(), duration.count());
-            }
-        {
-            // Run
-            auto starttime = std::chrono::system_clock::now();
-            parallel_for(0, RUN_SIZE, [&](const uint64_t &i) {
-                    if (ops[i] == OP_INSERT) {
-                        printf("in run i = %u and val = %lu\n", i, keys[i]);
-                        char buf[64];
-                        client.put(Str::snprintf(buf, sizeof(buf), "%lu", keys[i]), keys[i]);
-                    } else if (ops[i] == OP_READ) {
-                        char buf[64];
-                        client.get_check(Str::snprintf(buf, sizeof(buf), "%lu", keys[i]), keys[i]);
-                    } else if (ops[i] == OP_SCAN) {
-
-                        quick_istr search_key;
-                        search_key.set(keys[i], 8);
-                        std::vector<Str> found_keys, values;
-                        client.scan_sync(search_key.string(), ranges[i], found_keys, values);
-                        
-                        // uint64_t key_sum = 0, val_sum = 0;
-
-                        // for (size_t j = 0; j < values.size(); ++j) {
-                        //     key_sum += found_keys[j].to_i();
-                        //     val_sum += values[j].to_i();
-                        // }
-                        // query_results_keys[i] = key_sum;
-                        // query_results_vals[i] = val_sum;
-                        client.rcu_quiesce();
-                    // } else if (ops[i] == OP_SCAN_END) {
-			        //     uint64_t key_sum = 0, val_sum = 0;
-                    //     // concurrent_map.map_range(keys[i], range_end[i], [&key_sum, &val_sum]([[maybe_unused]] auto el) {
-                    //     //     key_sum += el.first;
-                    //     //     val_sum += el.second;
-                    //     // });
-                    //     // concurrent_map.map_range(keys[i], range_end[i], [&key_sum, &val_sum](auto key, auto value) {
-                    //     //     key_sum += key;
-                    //     //     val_sum += value;
-                    //     // });
-                    //     query_results_keys[i] = key_sum;
-                    //     query_results_vals[i] = val_sum;  
-                    }else{
-                        std::cout << "NOT SUPPORTED CMD!\n";
-                        exit(0);
-                    }
-            });
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                    std::chrono::system_clock::now() - starttime);
-            printf("\tRun, throughput: %f ,ops/us\n", (RUN_SIZE * 1.0) / duration.count());
-        }
-        uint64_t key_sum = 0;
-        uint64_t val_sum = 0;
-        for(int i = 0; i < RUN_SIZE; i++) {
-            key_sum += query_results_keys[i];
-            val_sum += query_results_vals[i];
-        }
-        printf("\ttotal key sum = %lu, total val sum = %lu\n\n", key_sum, val_sum);
-    //     }
-    // }
 }
 
-template <typename C>
-void kvtest_ycsb(C &client){
-        std::vector<uint64_t> init_keys;
-        std::vector<uint64_t> keys;
-        std::vector<uint64_t> ranges_end;
-        std::vector<int> ranges;
-        std::vector<int> ops;
+ycsb_data* get_ycsb_data(){
+    return &ycsb;
+}
 
-        init_keys.reserve(LOAD_SIZE);
-        keys.reserve(RUN_SIZE);
-        ranges_end.reserve(RUN_SIZE);
-        ranges.reserve(RUN_SIZE);
-        ops.reserve(RUN_SIZE);
 
-        memset(&init_keys[0], 0x00, LOAD_SIZE * sizeof(uint64_t));
-        memset(&keys[0], 0x00, RUN_SIZE * sizeof(uint64_t));
-        memset(&ranges_end[0], 0x00, RUN_SIZE * sizeof(uint64_t));
-        memset(&ranges[0], 0x00, RUN_SIZE * sizeof(int));
-        memset(&ops[0], 0x00, RUN_SIZE * sizeof(int));
+void kvtest_ycsb(){
+        // ycsb_data ycsb;
+        ycsb.init_keys.reserve(LOAD_SIZE);
+        ycsb.keys.reserve(RUN_SIZE);
+        ycsb.ranges_end.reserve(RUN_SIZE);
+        ycsb.ranges.reserve(RUN_SIZE);
+        ycsb.ops.reserve(RUN_SIZE);
+
+        memset(&ycsb.init_keys[0], 0x00, LOAD_SIZE * sizeof(uint64_t));
+        memset(&ycsb.keys[0], 0x00, RUN_SIZE * sizeof(uint64_t));
+        memset(&ycsb.ranges_end[0], 0x00, RUN_SIZE * sizeof(uint64_t));
+        memset(&ycsb.ranges[0], 0x00, RUN_SIZE * sizeof(int));
+        memset(&ycsb.ops[0], 0x00, RUN_SIZE * sizeof(int));
 
         int index_type = TYPE_BTREE;
-        int wl = WORKLOAD_A;
+        int wl = WORKLOAD_C;
         int kt = RANDINT_KEY;
         int ap = UNIFORM;
         int num_thread = 4;
-        ycsb_load_run_randint(client, index_type, wl, kt, ap, num_thread, init_keys, keys,ranges_end, ranges, ops);
+        ycsb_load_run_randint(index_type, wl, kt, ap, num_thread, ycsb.init_keys, ycsb.keys,ycsb.ranges_end, ycsb.ranges, ycsb.ops);
 
+        fprintf(stderr, "LOADED %lu keys", ycsb.keys.size());
         // wl = WORKLOAD_E;
         // ycsb_load_run_randint(client, index_type, wl, kt, ap, num_thread, init_keys, keys,ranges_end, ranges, ops);
 
