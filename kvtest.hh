@@ -111,6 +111,9 @@ unsigned kvtest_rw1puts_seed(C& client, int seed, int tid) {
     uint64_t per_thread = ycdata->init_keys.size() / client.nthreads();
     uint64_t start = tid * (per_thread); 
     uint64_t end = start + per_thread;
+    if(tid == client.nthreads()-1){
+        end = ycdata->init_keys.size();
+    }
 
    fprintf(stderr, " IN load phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
 
@@ -146,11 +149,17 @@ void kvtest_rw1run(C &client){
     uint64_t per_thread = ycdata->ops.size() / client.nthreads();
     uint64_t start = tid * (per_thread); 
     uint64_t end = start + per_thread;
+    if(tid == client.nthreads()-1){
+        end = ycdata->ops.size();
+    }
 
    fprintf(stderr, " IN run phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
     double tg0 = client.now();
     unsigned g;
 
+
+    std::vector<uint64_t> query_results_keys(RUN_SIZE);
+    std::vector<uint64_t> query_results_vals(RUN_SIZE);
     for (g = start; g < end; ++g) {
         if (ycdata->ops[g] == OP_INSERT || ycdata->ops[g] == OP_UPDATE) {
             // fprintf(stdout, " Putting %lu \n ", ycdata->keys[g]);
@@ -159,11 +168,39 @@ void kvtest_rw1run(C &client){
             // fprintf(stdout, " Searching %lu \n ", ycdata->keys[g]);
             client.get_check_u64(ycdata->keys[g], ycdata->keys[g]);
             // fprintf(stderr, "GET PASSESSSS!\n");
+
+        } else if (ycdata->ops[g] == OP_SCAN) {
+            std::vector<Str> found_keys, values;
+            quick_istr search_key;
+            search_key.set(ycdata->keys[g]);
+            client.scan_sync(search_key.string(), ycdata->ranges[g], found_keys, values);
+
+            // uint64_t key_sum = 0, val_sum = 0;
+            // fprintf(stdout, " range search: %s for %d vals \n ", search_key.data(), ycdata->ranges[g]);
+
+            // for (size_t j = 0; j < values.size(); ++j) {
+            //     key_sum += found_keys[j].to_i();
+            //     val_sum += values[j].to_i();
+            //     fprintf(stdout, " VAL: %lu vals \n ", values[j].to_i());
+
+            // }
+            // query_results_keys[g] = key_sum;
+            // query_results_vals[g] = val_sum;
+
         } else{
             fprintf(stderr, "NOT SUPPORTED CMD!\n");
             exit(0);
         }
     }
+
+
+        // uint64_t key_sum = 0;
+        // uint64_t val_sum = 0;
+        // for(int i = 0; i < RUN_SIZE; i++) {
+        //     key_sum += query_results_keys[i];
+        //     val_sum += query_results_vals[i];
+        // }
+        // printf("\ttotal key sum = %lu, total val sum = %lu\n\n", key_sum, val_sum);
 
     client.wait_all();
     double tg1 = client.now();
