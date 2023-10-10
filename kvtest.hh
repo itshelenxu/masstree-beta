@@ -115,9 +115,9 @@ unsigned kvtest_rw1puts_seed(C& client, int seed, int tid) {
         end = ycdata->init_keys.size();
     }
 
-   fprintf(stderr, " IN load phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
+//    fprintf(stderr, " IN load phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
 
-    double tp0 = client.now();
+    // double tp0 = client.now();
     for (n = start; n < end; ++n) {
         uint64_t x = ycdata->init_keys[n];
         client.put(x, x);
@@ -127,7 +127,7 @@ unsigned kvtest_rw1puts_seed(C& client, int seed, int tid) {
     double tp1 = client.now();
     client.puts_done();
 
-    client.report(kvtest_set_time(Json(), "puts", per_thread, tp1 - tp0));
+    // client.report(kvtest_set_time(Json(), "puts", per_thread, tp1 - tp0));
     return n;
 }
 std::atomic<int> atomic_count{0};
@@ -143,7 +143,7 @@ void kvtest_rw1run(C &client){
     int tid = atomic_run_count++;
 
 
-    client.notice("now getting\n");
+    // client.notice("now getting\n");
 
     ycsb_data* ycdata = get_ycsb_data();
     uint64_t per_thread = ycdata->ops.size() / client.nthreads();
@@ -153,13 +153,13 @@ void kvtest_rw1run(C &client){
         end = ycdata->ops.size();
     }
 
-   fprintf(stderr, " IN run phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
+//    fprintf(stderr, " IN run phase Thread = %d, Covering values %lu to %lu  \n", tid, start, end);
     double tg0 = client.now();
     unsigned g;
 
 
-    std::vector<uint64_t> query_results_keys(RUN_SIZE);
-    std::vector<uint64_t> query_results_vals(RUN_SIZE);
+    // std::vector<uint64_t> query_results_keys(RUN_SIZE);
+    // std::vector<uint64_t> query_results_vals(RUN_SIZE);
     for (g = start; g < end; ++g) {
         if (ycdata->ops[g] == OP_INSERT || ycdata->ops[g] == OP_UPDATE) {
             // fprintf(stdout, " Putting %lu \n ", ycdata->keys[g]);
@@ -205,11 +205,11 @@ void kvtest_rw1run(C &client){
     client.wait_all();
     double tg1 = client.now();
 
-    Json result = client.report(Json());
-    kvtest_set_time(result, "gets", per_thread, tg1 - tg0);
+    // Json result = client.report(Json());
+    // kvtest_set_time(result, "gets", per_thread, tg1 - tg0);
     // double delta_puts = n / result["puts_per_sec"].as_d();
     // kvtest_set_time(result, "ops", n + g, delta_puts + (tg1 - tg0));
-    client.report(result);
+    // client.report(result);
 }
 
 

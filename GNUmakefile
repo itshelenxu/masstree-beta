@@ -82,7 +82,7 @@ configure config.h.in: configure.ac
 	touch config.h.in
 
 config.status: configure
-	./configure  '--disable-assertions'
+	./configure  '--disable-assertions' 'CXX=g++'
 
 $(DEPSDIR)/stamp:
 	mkdir -p $(DEPSDIR)

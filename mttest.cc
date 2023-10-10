@@ -378,20 +378,25 @@ bool kvtest_client<T>::get_sync(Str key, Str& value) {
     return q_[0].run_get1(table_->table(), key, 0, value, *ti_);
 }
 
+uint64_t err_count = 0;
+
 template <typename T>
 void kvtest_client<T>::get_check(Str key, Str expected) {
     Str val;
     if (unlikely(!q_[0].run_get1(table_->table(), key, 0, val, *ti_))) {
-        fprintf(stdout, "Error: key = %s Expecetd val %s but not found. \n", key.data(), expected.data());
+        // fprintf(stdout, "Error: key = %s Expecetd val %s but not found. \n", key.data(), expected.data());
         // fail("get(%s) failed (expected %s)\n", String(key).printable().c_str(),
         //      String(expected).printable().c_str());
+        err_count++;
+
     } else if (unlikely(expected != val)) {
-        fprintf(stdout, "Error: Expecetd %lu but found %lu \n", expected, val);
+        // fprintf(stdout, "Error: Expecetd %lu but found %lu \n", expected, val);
 
         // fail("get(%s) returned unexpected value %s (expected %s)\n",
         //      String(key).printable().c_str(),
         //      String(val).substr(0, 40).printable().c_str(),
         //      String(expected).substr(0, 40).printable().c_str());
+        err_count++;
     }else{
         //  fprintf(stdout, " FOUND %lu!!\n", key);
     }
@@ -1128,16 +1133,17 @@ static void run_one_test_body(int trial, const char *treetype, const char *test)
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
                                 std::chrono::system_clock::now() - starttime);
 
-            printf("\t LOAD, throughput: %f ,ops/us\n", (LOAD_SIZE * 1.0) / duration.count());
+            fprintf(stderr, "\t LOAD, throughput: %f ,ops/us\n", (LOAD_SIZE * 1.0) / duration.count());
 
             if (strcmp(test, "rw1") == 0){
+                std::this_thread::sleep_for(std::chrono::nanoseconds(3000000000));
                 fprintf(stderr, "LOADDD COMPLETE");
                 current_test_name = "rw1run";
                 auto starttime = std::chrono::system_clock::now();
                 runtest(tcpthreads, test_thread_map[i].go_func);
                 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::system_clock::now() - starttime);
-                printf("\t RUN, throughput: %f ,ops/us\n", (RUN_SIZE * 1.0) / duration.count());
+                fprintf(stderr, "\t RUN, throughput: %f ,ops/us\n", (RUN_SIZE * 1.0) / duration.count());
 
                 fprintf(stderr, "RUNN COMPLETE");
             }
